@@ -1,6 +1,8 @@
-// Vercel Serverless Function: 音频代理
-// 获取真实音频 URL 并重定向，浏览器直接下载音频
-const fetch = require('node-fetch');
+// Vercel Edge Function: 流式代理音频
+// 通过 Edge Runtime 流式转发音频，避免 302 重定向被 CDN 防盗链拦截
+export const config = {
+    runtime: 'edge',
+};
 
 const NETEASE_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
@@ -8,9 +10,20 @@ const NETEASE_HEADERS = {
     'Cookie': 'os=pc; appver=2.10.11; osver=MacOS14.0',
 };
 
-module.exports = async (req, res) => {
-    const id = req.query.id;
-    if (!id) return res.status(400).send('missing id');
+export default async function handler(req) {
+    if (req.method === 'OPTIONS') {
+        return new Response(null, {
+            headers: {
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Methods': 'GET',
+                'Access-Control-Allow-Headers': 'Range',
+            },
+        });
+    }
+
+    const url = new URL(req.url);
+    const id = url.searchParams.get('id');
+    if (!id) return new Response('missing id', { status: 400 });
 
     try {
         // 获取真实音频 URL
@@ -29,17 +42,45 @@ module.exports = async (req, res) => {
         }
 
         if (!mp3Url || mp3Url.includes('404')) {
-            return res.status(404).send('song not available');
+            return new Response('song not available', { status: 404 });
         }
 
-        // 确保使用 HTTPS（浏览器在 HTTPS 页面会阻止 HTTP 混合内容）
+        // 确保 HTTPS
         if (mp3Url.startsWith('http://')) {
-            mp3Url = mp3Url.replace('http://', 'https://');
+            mp3Url = 'https://' + mp3Url.substring(7);
         }
 
-        // 302 重定向到真实音频地址
-        res.redirect(mp3Url);
+        // 构建请求头，传递 Range 以支持拖动进度条
+        const audioHeaders = {
+            'User-Agent': 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36',
+            'Referer': 'https://music.163.com/',
+        };
+        const range = req.headers.get('range');
+        if (range) audioHeaders['Range'] = range;
+
+        // 流式转发音频数据
+        const audioResp = await fetch(mp3Url, { headers: audioHeaders });
+
+        if (!audioResp.ok && audioResp.status !== 206) {
+            return new Response('fetch audio failed', { status: audioResp.status });
+        }
+
+        const respHeaders = new Headers({
+            'Content-Type': audioResp.headers.get('content-type') || 'audio/mpeg',
+            'Accept-Ranges': 'bytes',
+            'Access-Control-Allow-Origin': '*',
+        });
+
+        const cl = audioResp.headers.get('content-length');
+        if (cl) respHeaders.set('Content-Length', cl);
+        const cr = audioResp.headers.get('content-range');
+        if (cr) respHeaders.set('Content-Range', cr);
+
+        return new Response(audioResp.body, {
+            status: audioResp.status,
+            headers: respHeaders,
+        });
     } catch (e) {
-        res.status(500).send('proxy error');
+        return new Response('proxy error: ' + e.message, { status: 500 });
     }
-};
+}
