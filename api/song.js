@@ -32,6 +32,11 @@ module.exports = async (req, res) => {
             return res.status(404).send('song not available');
         }
 
+        // 确保使用 HTTPS（浏览器在 HTTPS 页面会阻止 HTTP 混合内容）
+        if (mp3Url.startsWith('http://')) {
+            mp3Url = mp3Url.replace('http://', 'https://');
+        }
+
         // 302 重定向到真实音频地址
         res.redirect(mp3Url);
     } catch (e) {

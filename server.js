@@ -81,6 +81,11 @@ app.get('/api/song', async (req, res) => {
         const data = await resp.json();
         let mp3Url = data?.data?.[0]?.url;
 
+        // 确保使用 HTTPS
+        if (mp3Url && mp3Url.startsWith('http://')) {
+            mp3Url = mp3Url.replace('http://', 'https://');
+        }
+
         if (!mp3Url) {
             const altResp = await fetch(
                 `https://music.163.com/song/media/outer/url?id=${id}.mp3`,
