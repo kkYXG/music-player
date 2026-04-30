@@ -493,7 +493,22 @@ audioPlayer.addEventListener('ended', () => {
 });
 
 audioPlayer.addEventListener('error', () => {
-    // 静默处理音频加载错误，不影响UI体验
+    const code = audioPlayer.error ? audioPlayer.error.code : 0;
+    const msgs = {
+        1: '播放被中断',
+        2: '网络错误，音频加载失败',
+        3: '音频解码失败',
+        4: '音频源不可用',
+    };
+    showToast('播放失败: ' + (msgs[code] || '未知错误'));
+
+    // 诊断：请求 API 看看返回什么
+    if (currentSong) {
+        fetch(`/api/song?id=${currentSong.nid}`).then(r => {
+            if (!r.ok) return r.text();
+            return 'API 返回状态: ' + r.status + ', Content-Type: ' + r.headers.get('content-type');
+        }).then(t => console.warn('[音频诊断]', t)).catch(() => {});
+    }
 });
 
 // 进度条拖动
