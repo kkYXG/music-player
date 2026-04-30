@@ -1,17 +1,8 @@
 {
   "name": "music-player",
   "version": "1.0.0",
-  "main": "test.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "description": "",
+  "private": true,
   "dependencies": {
-    "express": "^5.2.1",
-    "node-fetch": "^2.7.0",
-    "playwright": "^1.52.0"
+    "node-fetch": "^2.7.0"
   }
 }
